@@ -69,6 +69,9 @@ chatgpt_from_scratch/
 ├── data/
 │   ├── cleaned_data.csv  # Preprocessed dataset
 │   └── tokenizer.json    # Trained tokenizer
+├── extra/
+│   ├── emb_comparison.py # Word vector arithmetic demonstrations
+│   └── simple_cbow.py    # Simple CBOW implementation for word embeddings
 ├── pxl_gpt/
 │   ├── dataset.py        # Dataset handling
 │   ├── dataset_loader.py # Dataset loading utilities
@@ -94,11 +97,20 @@ A custom implementation of Byte Pair Encoding (BPE) tokenization, similar to wha
 - Builds a vocabulary of subword units
 - Provides encoding and decoding functionality
 
+### Extra Scripts
+
+The `extra` directory contains supplementary scripts that demonstrate concepts related to word embeddings:
+
+- **emb_comparison.py**: Demonstrates word vector arithmetic using Google's pre-trained word2vec model. It shows interesting semantic relationships like "king - man + woman = queen" and similar vector operations.
+- **simple_cbow.py**: Implements a Continuous Bag of Words (CBOW) model from scratch using PyTorch. This script trains word embeddings on a small French corpus and visualizes the resulting word vectors, showing how related words cluster together in the embedding space.
+
+These scripts help understand the embedding concepts that underlie modern language models.
+
 ### Model (Coming Soon)
 
 The GPT model architecture implementation.
 
-## Translated Code 
+## Translated Code
 
 - [Code en Java by MrQsdf](https://github.com/mrqsdf/chatgpt_de_zero-Java/tree/main) - Code translated to java
 
