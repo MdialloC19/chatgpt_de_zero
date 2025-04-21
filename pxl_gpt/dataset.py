@@ -2,7 +2,7 @@ from .dataset_loader import DatasetLoader
 
 
 class Dataset:
-    def __init__(self, dataset_ref="breandan/french-reddit-discussion", download_dir="data", max_length=10000):
+    def __init__(self, dataset_ref="breandan/french-reddit-discussion", download_dir="data", max_length=None):
         """
         Initialize the Dataset class.
         :param dataset_ref: Reference to the dataset.
@@ -15,16 +15,35 @@ class Dataset:
     def preprocess(self):
         """
         Preprocess the dataset by removing unnecessary columns and rows.
-        :param dataset: The dataset to preprocess.
         :return: Preprocessed dataset.
         """
-        # We want to only keep raw text and remove any other columns.
-
+        # Keep only the raw text column
         text_only = self.raw_data["utt"]
 
-        # Remove any rows that are empty or contain only whitespace
+        # Remove empty rows or rows with only whitespace
         text_only = text_only[text_only.str.strip() != ""]
-        # Remove any rows that are too short
+        # Remove rows that are too short
         text_only = text_only[text_only.str.len() > 5]
 
-        self.data = text_only.to_list()[: self.max_length]
+        # Convert text to lowercase
+        text_only = text_only.str.lower()
+
+        # Replace special spaces with regular space
+        text_only = text_only.str.replace(r"[\u00A0\u202F\u2009]", " ", regex=True)
+
+        # Remove emojis and unicode symbols
+        text_only = text_only.str.replace(r"[\U00010000-\U0010ffff]", "", regex=True)
+
+        # Remove URLs
+        text_only = text_only.str.replace(r"http\S+|www\S+|https\S+", "", regex=True)
+
+        # Keep only allowed characters (French letters, digits, basic punctuation)
+        # This removes things like ė, χ, β, ロ, 漂, ⅔, etc.
+        text_only = text_only.str.replace(r"[^a-zA-Z0-9\sàâäçéèêëîïôöùûüÿœæ.,!?;:()'\"-]", "", regex=True)
+
+        # Save the cleaned text
+        self.data = text_only.to_list()
+
+        # Limit the length of the dataset if max_length is specified
+        if self.max_length is not None:
+            self.data = self.data[: self.max_length]
