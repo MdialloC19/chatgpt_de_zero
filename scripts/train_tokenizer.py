@@ -15,7 +15,7 @@ def main():
 
     # STEP 3: Train the tokenizer
     logger.info("Training tokenizer...")
-    tokenizer = BPETokenizer()
+    tokenizer = BPETokenizer(vocab_size=10000, min_frequency=500)
     tokenizer.train(dataset)
 
     # STEP 4: Test the tokenizer

@@ -10,7 +10,14 @@ class BPETokenizer:
         self.vocab_size = vocab_size
         self.min_frequency = min_frequency
         self.vocab = {}
-        self.merges = {}
+
+    def _pretokenize(self, text):
+        """Pre-tokenize the text to handle punctuation and spaces."""
+        text = text.lower()  # Convert to lowercase, because our dataset is lowercase only
+
+        # This regex splits on word boundaries but keeps punctuation as separate tokens
+        tokens = re.findall(r"\w+|[^\w\s]|\s", text)
+        return tokens
 
     def train(self, dataset: Dataset):
         """Train the BPE tokenizer on the dataset."""
@@ -22,7 +29,7 @@ class BPETokenizer:
         all_tokens = []
         for text in dataset.data:
             # This regex splits on word boundaries but keeps punctuation as separate tokens
-            tokens = re.findall(r"\w+|[^\w\s]|\s", text)  # Include space as a token
+            tokens = self._pretokenize(text)
             all_tokens.extend(tokens)
 
         # Count token frequencies
@@ -43,7 +50,7 @@ class BPETokenizer:
                         idx += 1
 
         # Step 4: BPE algorithm - merge most frequent pairs
-        num_merges = min(self.vocab_size - len(vocab), 10000)
+        num_merges = max(self.vocab_size - len(vocab), 0)
 
         for _ in tqdm(range(num_merges)):
             # Count all symbol pairs
@@ -70,9 +77,6 @@ class BPETokenizer:
             vocab[new_symbol] = idx
             idx += 1
 
-            # Save merge operation
-            self.merges[best_pair] = new_symbol
-
             # Apply merge to all splits
             for token in token_splits:
                 symbols = token_splits[token]
@@ -91,40 +95,61 @@ class BPETokenizer:
         self.vocab = vocab
 
     def encode(self, text):
-        """Encode text using BPE."""
+        """Encode text using BPE with Maximum Matching First (greedy) algorithm."""
         # Tokenize the text properly
-        tokens = re.findall(r"\w+|[^\w\s]|\s", text)  # Include space as a token
+        tokens = self._pretokenize(text)
         token_ids = []
 
         for token in tokens:
-            # Apply merges in sequence
+            # Handle space token specially
             if token == " ":
-                token_ids.append(self.vocab.get("<SPACE>", self.vocab["<UNK>"]))  # Use the space token
+                token_ids.append(self.vocab.get("<SPACE>", self.vocab["<UNK>"]))
                 continue
 
-            symbols = list(token)
+            # Check if the entire token exists in vocabulary
+            if token in self.vocab:
+                token_ids.append(self.vocab[token])
+                continue
 
-            # Apply merges until no more can be applied
-            while len(symbols) > 1:
-                # Find the first pair that can be merged
-                merged = False
-                for i in range(len(symbols) - 1):
-                    pair = (symbols[i], symbols[i + 1])
-                    if pair in self.merges:
-                        symbols[i] = self.merges[pair]
-                        symbols.pop(i + 1)
-                        merged = True
+            # Maximum Matching First algorithm for unknown tokens
+            i = 0
+            current_token_ids = []
+
+            while i < len(token):
+                # Try to find the longest matching subtokens
+                best_len = 0
+                best_match = None
+
+                # Look for the longest possible match starting at position i
+                for end in range(len(token), i, -1):
+                    subtoken = token[i:end]
+                    if subtoken in self.vocab:
+                        best_len = end - i
+                        best_match = subtoken
                         break
 
-                # If no merge was possible, we're done
-                if not merged:
-                    break
+                # If no match found, use single character and mark as unknown if needed
+                if best_match is None:
+                    char = token[i]
+                    current_token_ids.append(self.vocab.get(char, self.vocab["<UNK>"]))
+                    i += 1
+                else:
+                    # Add the matching token
+                    current_token_ids.append(self.vocab[best_match])
+                    i += best_len
 
-            # Convert symbols to IDs
-            for symbol in symbols:
-                token_ids.append(self.vocab.get(symbol, self.vocab["<UNK>"]))
+            token_ids.extend(current_token_ids)
 
         return token_ids
+
+    def get_tokens_with_values(self, text):
+        """Get tokens with their values from the text."""
+        tokens = self.encode(text)
+        tokens_with_values = []
+        for token in tokens:
+            token_value = next((k for k, v in self.vocab.items() if v == token), "<UNK>")
+            tokens_with_values.append((token_value, token))
+        return tokens_with_values
 
     def decode(self, token_ids):
         """Decode token IDs back to text."""
@@ -143,9 +168,11 @@ class BPETokenizer:
         """Save the tokenizer to a file."""
         import json
 
-        data = {"vocab": self.vocab, "merges": {str(k): v for k, v in self.merges.items()}}
+        data = {
+            "vocab": self.vocab,
+        }
         with open(path, "w") as f:
-            json.dump(data, f)
+            json.dump(data, f, ensure_ascii=False, indent=4)
 
     def load(self, path):
         """Load the tokenizer from a file."""
@@ -155,5 +182,3 @@ class BPETokenizer:
         with open(path, "r") as f:
             data = json.load(f)
         self.vocab = data["vocab"]
-        # Convert string keys back to tuples
-        self.merges = {ast.literal_eval(k): v for k, v in data["merges"].items()}
